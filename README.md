@@ -41,10 +41,10 @@ Ejecuta el SQL de [supabase/schema.sql](supabase/schema.sql) en el SQL Editor de
 Para un proyecto ya creado, ejecuta tambien [supabase/auth-policies-and-retention.sql](supabase/auth-policies-and-retention.sql). Ese script:
 
 - Corrige las politicas RLS para que los usuarios de Supabase Auth puedan leer, guardar y editar registros.
-- Activa una limpieza automatica que borra los registros mas antiguos cuando una tabla supera el limite configurado.
-- Deja un limite inicial de 40 MB por tabla y conserva minimo 100 registros por tabla.
+- Activa una limpieza automatica que borra los registros mas antiguos cuando el total combinado de las dos tablas se acerca al limite configurado.
+- Deja un limite inicial global de 470 MB para registros de listas y conserva minimo 100 registros por cada tabla.
 
-La limpieza se basa en el tamano logico de los registros vivos. En Postgres el tamano fisico de una tabla puede no bajar inmediatamente despues de borrar datos, pero ese espacio queda disponible para reutilizarse.
+El plan gratuito Nano de Supabase recomienda hasta 500 MB de base de datos. El limite global de 470 MB para registros de listas deja un margen pequeno para Auth, indices, metadatos y crecimiento interno de Postgres. La limpieza se basa en el tamano logico de los registros vivos; el tamano fisico de una tabla puede no bajar inmediatamente despues de borrar datos, pero ese espacio queda disponible para reutilizarse.
 
 Puedes revisar el uso actual con esta consulta:
 
@@ -52,7 +52,7 @@ Puedes revisar el uso actual con esta consulta:
 select * from public.get_checklist_storage_usage();
 ```
 
-Para cambiar el limite, ajusta `max_live_bytes` en `public.checklist_storage_limits`.
+Para cambiar el limite, ajusta `max_total_live_bytes` en `public.checklist_storage_policy`.
 
 ### Usuarios
 
