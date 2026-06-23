@@ -4,6 +4,14 @@ const LOCAL_STORAGE_KEY = "spray-checklist-records";
 const TABLE_NAME = "spray_checklist_records";
 const SYNC_PENDING = "pending";
 const SYNC_SYNCED = "synced";
+const RECORDS_RESET_AT = Date.parse("2026-06-23T15:33:29.521Z");
+
+function isAfterReset(record) {
+  const timestamp = new Date(record.finishedAt ?? record.createdAt ?? 0).getTime();
+  return !Number.isFinite(RECORDS_RESET_AT)
+    || !Number.isFinite(timestamp)
+    || timestamp >= RECORDS_RESET_AT;
+}
 
 function readLocalRecords() {
   const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -15,7 +23,7 @@ function readLocalRecords() {
   try {
     const parsed = JSON.parse(stored);
     return Array.isArray(parsed)
-      ? parsed.map((record) => ({
+      ? parsed.filter(isAfterReset).map((record) => ({
         ...record,
         syncStatus: record.syncStatus ?? SYNC_PENDING
       }))
@@ -96,9 +104,8 @@ function mergeRecords(localRecords, remoteRecords) {
     const remoteRecord = mergedById.get(localRecord.id);
 
     if (
-      !remoteRecord ||
       localRecord.syncStatus === SYNC_PENDING ||
-      getRecordTimestamp(localRecord) > getRecordTimestamp(remoteRecord)
+      (remoteRecord && getRecordTimestamp(localRecord) > getRecordTimestamp(remoteRecord))
     ) {
       mergedById.set(localRecord.id, localRecord);
     }
@@ -177,7 +184,8 @@ export async function loadRecords() {
         .limit(100);
 
       if (!error && data) {
-        const mergedRecords = mergeRecords(localRecords, data.map(mapSupabaseRecord));
+        const remoteRecords = data.map(mapSupabaseRecord).filter(isAfterReset);
+        const mergedRecords = mergeRecords(localRecords, remoteRecords);
         writeLocalRecords(mergedRecords);
 
         return {
