@@ -4,14 +4,6 @@ const LOCAL_STORAGE_KEY = "rb-monitoring-checklist-records";
 const TABLE_NAME = "rb_monitoring_records";
 const SYNC_PENDING = "pending";
 const SYNC_SYNCED = "synced";
-const RECORDS_RESET_AT = Date.parse("2026-06-23T15:33:29.521Z");
-
-function isAfterReset(record) {
-  const timestamp = new Date(record.finishedAt ?? record.createdAt ?? 0).getTime();
-  return !Number.isFinite(RECORDS_RESET_AT)
-    || !Number.isFinite(timestamp)
-    || timestamp >= RECORDS_RESET_AT;
-}
 
 function readLocalRecords() {
   const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -23,7 +15,7 @@ function readLocalRecords() {
   try {
     const parsed = JSON.parse(stored);
     return Array.isArray(parsed)
-      ? parsed.filter(isAfterReset).map((record) => ({
+      ? parsed.map((record) => ({
         ...record,
         syncStatus: record.syncStatus ?? SYNC_PENDING
       }))
@@ -176,7 +168,7 @@ export async function loadRbMonitoringRecords() {
         .limit(100);
 
       if (!error && data) {
-        const remoteRecords = data.map(mapSupabaseRecord).filter(isAfterReset);
+        const remoteRecords = data.map(mapSupabaseRecord);
         const mergedRecords = mergeRecords(localRecords, remoteRecords);
         writeLocalRecords(mergedRecords);
 
