@@ -38,6 +38,22 @@ Ejecuta el SQL de [supabase/schema.sql](supabase/schema.sql) en el SQL Editor de
 - `spray_checklist_records`
 - `rb_monitoring_records`
 
+Para un proyecto ya creado, ejecuta tambien [supabase/auth-policies-and-retention.sql](supabase/auth-policies-and-retention.sql). Ese script:
+
+- Corrige las politicas RLS para que los usuarios de Supabase Auth puedan leer, guardar y editar registros.
+- Activa una limpieza automatica que borra los registros mas antiguos cuando una tabla supera el limite configurado.
+- Deja un limite inicial de 40 MB por tabla y conserva minimo 100 registros por tabla.
+
+La limpieza se basa en el tamano logico de los registros vivos. En Postgres el tamano fisico de una tabla puede no bajar inmediatamente despues de borrar datos, pero ese espacio queda disponible para reutilizarse.
+
+Puedes revisar el uso actual con esta consulta:
+
+```sql
+select * from public.get_checklist_storage_usage();
+```
+
+Para cambiar el limite, ajusta `max_live_bytes` en `public.checklist_storage_limits`.
+
 ### Usuarios
 
 La app usa Supabase Auth. Crea estos usuarios en `Authentication > Users`:

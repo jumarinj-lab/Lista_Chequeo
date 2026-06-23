@@ -33,6 +33,10 @@ create table if not exists public.rb_monitoring_records (
 alter table public.spray_checklist_records enable row level security;
 alter table public.rb_monitoring_records enable row level security;
 
+grant usage on schema public to authenticated;
+grant select, insert, update on public.spray_checklist_records to authenticated;
+grant select, insert, update on public.rb_monitoring_records to authenticated;
+
 drop policy if exists "spray_checklist_records_select" on public.spray_checklist_records;
 drop policy if exists "spray_checklist_records_insert" on public.spray_checklist_records;
 drop policy if exists "spray_checklist_records_update" on public.spray_checklist_records;
@@ -40,19 +44,19 @@ drop policy if exists "spray_checklist_records_update" on public.spray_checklist
 create policy "spray_checklist_records_select"
 on public.spray_checklist_records
 for select
-to anon
+to authenticated
 using (true);
 
 create policy "spray_checklist_records_insert"
 on public.spray_checklist_records
 for insert
-to anon
+to authenticated
 with check (true);
 
 create policy "spray_checklist_records_update"
 on public.spray_checklist_records
 for update
-to anon
+to authenticated
 using (true)
 with check (true);
 
@@ -63,18 +67,18 @@ drop policy if exists "rb_monitoring_records_update" on public.rb_monitoring_rec
 create policy "rb_monitoring_records_select"
 on public.rb_monitoring_records
 for select
-to anon
+to authenticated
 using (true);
 
 create policy "rb_monitoring_records_insert"
 on public.rb_monitoring_records
 for insert
-to anon
+to authenticated
 with check (true);
 
 create policy "rb_monitoring_records_update"
 on public.rb_monitoring_records
 for update
-to anon
+to authenticated
 using (true)
 with check (true);
