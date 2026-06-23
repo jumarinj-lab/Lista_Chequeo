@@ -127,6 +127,99 @@ function getPercent(result, expected) {
   return expected > 0 ? result / expected : 0;
 }
 
+function getRbRecordDate(record) {
+  return parseStoredDate(record.finishedAt ?? record.createdAt ?? record.savedDate) ?? new Date();
+}
+
+function getDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getExcelDateSerial(date) {
+  const utcDate = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  return Math.round(utcDate / 86400000 + 25569);
+}
+
+function getWeekdayName(date) {
+  return new Intl.DateTimeFormat("es-CO", { weekday: "long" }).format(date);
+}
+
+function getRbSimulacrosTotals(form = {}) {
+  const sites = Array.isArray(form.sites) ? form.sites : [];
+
+  return sites.reduce((totals, site) => ({
+    programmed: totals.programmed + (Number(site.disposed) || 0),
+    found: totals.found + (Number(site.found) || 0)
+  }), { programmed: 0, found: 0 });
+}
+
+function buildRbSimulacrosDailyRows(records) {
+  const rowsByKey = new Map();
+
+  for (const record of records) {
+    const form = record.form ?? {};
+    const name = form.monitorName ?? "";
+    const date = getRbRecordDate(record);
+    const week = getRbRecordWeekCode(record);
+    const totals = getRbSimulacrosTotals(form);
+    const key = `${getDateKey(date)}|${normalizeSearchText(name)}`;
+    const current = rowsByKey.get(key) ?? {
+      date,
+      day: getWeekdayName(date),
+      year: Number(String(date.getFullYear()).slice(-2)),
+      week,
+      name,
+      programmed: 0,
+      found: 0
+    };
+
+    current.programmed += totals.programmed;
+    current.found += totals.found;
+    rowsByKey.set(key, current);
+  }
+
+  return [...rowsByKey.values()]
+    .sort((left, right) => left.date - right.date || left.name.localeCompare(right.name, "es"))
+    .map((row) => ({
+      ...row,
+      dateSerial: getExcelDateSerial(row.date),
+      compliance: getPercent(row.found, row.programmed)
+    }));
+}
+
+function buildRbSimulacrosWeeklyRows(records) {
+  const rowsByKey = new Map();
+
+  for (const record of records) {
+    const form = record.form ?? {};
+    const name = form.monitorName ?? "";
+    const week = getRbRecordWeekCode(record);
+    const totals = getRbSimulacrosTotals(form);
+    const key = `${week}|${normalizeSearchText(name)}`;
+    const current = rowsByKey.get(key) ?? {
+      week,
+      name,
+      programmed: 0,
+      found: 0
+    };
+
+    current.programmed += totals.programmed;
+    current.found += totals.found;
+    rowsByKey.set(key, current);
+  }
+
+  return [...rowsByKey.values()]
+    .sort((left, right) => String(left.week).localeCompare(String(right.week)) || left.name.localeCompare(right.name, "es"))
+    .map((row) => ({
+      ...row,
+      compliance: getPercent(row.found, row.programmed)
+    }));
+}
+
 function buildSprayExportRows(records) {
   const elementos = getSection("elementos");
   const mezclaClima = getSection("mezcla_clima");
@@ -361,11 +454,120 @@ function buildWorksheetXml(rows) {
 </worksheet>`;
 }
 
-function buildWorkbookXml(sheetName) {
+function buildRbSimulacrosDailyWorksheetXml(rows) {
+  const lastRow = Math.max(rows.length + 1, 1);
+  const headers = [
+    { column: "A", value: "FECHA" },
+    { column: "B", value: "DÍA" },
+    { column: "C", value: "AÑO" },
+    { column: "D", value: "SEMANA" },
+    { column: "E", value: "NOMBRE" },
+    { column: "F", value: "PROGRAMADO" },
+    { column: "G", value: "ENCONTRADO" },
+    { column: "H", value: "CUMPLIMIENTO" }
+  ];
+  const headerCells = headers.map((header) => getTextCell(header.column, 1, header.value, 3)).join("");
+  const dataRows = rows.map((row, index) => {
+    const rowIndex = index + 2;
+    const cells = [
+      getNumberCell("A", rowIndex, row.dateSerial, 4),
+      getTextCell("B", rowIndex, row.day),
+      getNumberCell("C", rowIndex, row.year),
+      getTextCell("D", rowIndex, row.week),
+      getTextCell("E", rowIndex, row.name),
+      getNumberCell("F", rowIndex, row.programmed),
+      getNumberCell("G", rowIndex, row.found),
+      getNumberCell("H", rowIndex, row.compliance, 2)
+    ].join("");
+
+    return `<row r="${rowIndex}">${cells}</row>`;
+  }).join("");
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <dimension ref="A1:H${lastRow}"/>
+  <sheetViews>
+    <sheetView workbookViewId="0">
+      <pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>
+      <selection pane="bottomLeft"/>
+    </sheetView>
+  </sheetViews>
+  <sheetFormatPr defaultRowHeight="18"/>
+  <cols>
+    <col min="1" max="1" width="13" customWidth="1"/>
+    <col min="2" max="2" width="11" customWidth="1"/>
+    <col min="3" max="3" width="8" customWidth="1"/>
+    <col min="4" max="4" width="11" customWidth="1"/>
+    <col min="5" max="5" width="28" customWidth="1"/>
+    <col min="6" max="6" width="18" customWidth="1"/>
+    <col min="7" max="7" width="18" customWidth="1"/>
+    <col min="8" max="8" width="18" customWidth="1"/>
+  </cols>
+  <sheetData>
+    <row r="1">${headerCells}</row>
+    ${dataRows}
+  </sheetData>
+  <pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
+</worksheet>`;
+}
+
+function buildRbSimulacrosWeeklyWorksheetXml(rows) {
+  const lastRow = Math.max(rows.length + 1, 1);
+  const headers = [
+    { column: "A", value: "SEMANA" },
+    { column: "B", value: "NOMBRE" },
+    { column: "C", value: "PROGRAMADO" },
+    { column: "D", value: "ENCONTRADO" },
+    { column: "E", value: "CUMPLIMIENTO" }
+  ];
+  const headerCells = headers.map((header) => getTextCell(header.column, 1, header.value, 3)).join("");
+  const dataRows = rows.map((row, index) => {
+    const rowIndex = index + 2;
+    const cells = [
+      getTextCell("A", rowIndex, row.week),
+      getTextCell("B", rowIndex, row.name),
+      getNumberCell("C", rowIndex, row.programmed),
+      getNumberCell("D", rowIndex, row.found),
+      getNumberCell("E", rowIndex, row.compliance, 2)
+    ].join("");
+
+    return `<row r="${rowIndex}">${cells}</row>`;
+  }).join("");
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <dimension ref="A1:E${lastRow}"/>
+  <sheetViews>
+    <sheetView workbookViewId="0">
+      <pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>
+      <selection pane="bottomLeft"/>
+    </sheetView>
+  </sheetViews>
+  <sheetFormatPr defaultRowHeight="18"/>
+  <cols>
+    <col min="1" max="1" width="11" customWidth="1"/>
+    <col min="2" max="2" width="28" customWidth="1"/>
+    <col min="3" max="3" width="18" customWidth="1"/>
+    <col min="4" max="4" width="18" customWidth="1"/>
+    <col min="5" max="5" width="18" customWidth="1"/>
+  </cols>
+  <sheetData>
+    <row r="1">${headerCells}</row>
+    ${dataRows}
+  </sheetData>
+  <pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
+</worksheet>`;
+}
+
+function buildWorkbookXml(sheetNames) {
+  const sheets = sheetNames.map((sheetName, index) =>
+    `<sheet name="${escapeXml(sheetName).slice(0, 31)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`
+  ).join("");
+
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <sheets>
-    <sheet name="${escapeXml(sheetName).slice(0, 31)}" sheetId="1" r:id="rId1"/>
+    ${sheets}
   </sheets>
 </workbook>`;
 }
@@ -373,8 +575,9 @@ function buildWorkbookXml(sheetName) {
 function buildStylesXml() {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <numFmts count="1">
+  <numFmts count="2">
     <numFmt numFmtId="164" formatCode="0.00%"/>
+    <numFmt numFmtId="165" formatCode="dd/mm/yyyy"/>
   </numFmts>
   <fonts count="2">
     <font><sz val="11"/><name val="Calibri"/></font>
@@ -398,7 +601,7 @@ function buildStylesXml() {
   <cellStyleXfs count="1">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
   </cellStyleXfs>
-  <cellXfs count="4">
+  <cellXfs count="5">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
     <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1">
       <alignment vertical="center" wrapText="1"/>
@@ -409,6 +612,9 @@ function buildStylesXml() {
     <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1">
       <alignment horizontal="center" vertical="center" wrapText="1"/>
     </xf>
+    <xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1">
+      <alignment vertical="center"/>
+    </xf>
   </cellXfs>
   <cellStyles count="1">
     <cellStyle name="Normal" xfId="0" builtinId="0"/>
@@ -416,14 +622,18 @@ function buildStylesXml() {
 </styleSheet>`;
 }
 
-function getContentTypesXml() {
+function getContentTypesXml(sheetCount = 1) {
+  const worksheetOverrides = Array.from({ length: sheetCount }, (_, index) =>
+    `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`
+  ).join("");
+
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
   <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
-  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  ${worksheetOverrides}
 </Types>`;
 }
 
@@ -434,11 +644,15 @@ function getRootRelsXml() {
 </Relationships>`;
 }
 
-function getWorkbookRelsXml() {
+function getWorkbookRelsXml(sheetCount = 1) {
+  const worksheetRelationships = Array.from({ length: sheetCount }, (_, index) =>
+    `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`
+  ).join("");
+
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  ${worksheetRelationships}
+  <Relationship Id="rId${sheetCount + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>`;
 }
 
@@ -556,14 +770,18 @@ function buildZip(files) {
   return concatUint8Arrays([...localFileChunks, centralDirectory, endRecord]);
 }
 
-function downloadWorkbook({ rows, sheetName, fileName }) {
+function downloadWorkbook({ worksheets, fileName }) {
+  const sheetCount = worksheets.length;
   const files = [
-    { name: "[Content_Types].xml", content: getContentTypesXml() },
+    { name: "[Content_Types].xml", content: getContentTypesXml(sheetCount) },
     { name: "_rels/.rels", content: getRootRelsXml() },
-    { name: "xl/workbook.xml", content: buildWorkbookXml(sheetName) },
-    { name: "xl/_rels/workbook.xml.rels", content: getWorkbookRelsXml() },
+    { name: "xl/workbook.xml", content: buildWorkbookXml(worksheets.map((worksheet) => worksheet.name)) },
+    { name: "xl/_rels/workbook.xml.rels", content: getWorkbookRelsXml(sheetCount) },
     { name: "xl/styles.xml", content: buildStylesXml() },
-    { name: "xl/worksheets/sheet1.xml", content: buildWorksheetXml(rows) }
+    ...worksheets.map((worksheet, index) => ({
+      name: `xl/worksheets/sheet${index + 1}.xml`,
+      content: worksheet.content
+    }))
   ];
   const blob = new Blob([buildZip(files)], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -590,16 +808,32 @@ function getExportDateStamp() {
 
 export function downloadSprayRecordsExcel(records) {
   downloadWorkbook({
-    rows: buildSprayExportRows(records),
-    sheetName: "Listado chequeo aplicación",
+    worksheets: [
+      {
+        name: "Listado chequeo aplicación",
+        content: buildWorksheetXml(buildSprayExportRows(records))
+      }
+    ],
     fileName: `listado-chequeo-aplicacion-${getExportDateStamp()}.xlsx`
   });
 }
 
 export function downloadRbRecordsExcel(records) {
   downloadWorkbook({
-    rows: buildRbExportRows(records),
-    sheetName: "Monitoreo roya blanca",
+    worksheets: [
+      {
+        name: "Monitoreo roya blanca",
+        content: buildWorksheetXml(buildRbExportRows(records))
+      },
+      {
+        name: "SIMULACROS DIAS",
+        content: buildRbSimulacrosDailyWorksheetXml(buildRbSimulacrosDailyRows(records))
+      },
+      {
+        name: "SIMULACRO SEMANA",
+        content: buildRbSimulacrosWeeklyWorksheetXml(buildRbSimulacrosWeeklyRows(records))
+      }
+    ],
     fileName: `monitoreo-roya-blanca-${getExportDateStamp()}.xlsx`
   });
 }
