@@ -38,6 +38,16 @@ Ejecuta el SQL de [supabase/schema.sql](supabase/schema.sql) en el SQL Editor de
 - `spray_checklist_records`
 - `rb_monitoring_records`
 
+### Usuarios
+
+La app usa Supabase Auth. Crea estos usuarios en `Authentication > Users`:
+
+- `jefemipe@trigal.com`: rol visual `jefe`
+- `operariomipe@trigal.com`: rol visual `operario`
+- `auxiliarpro@trigal.com`: rol visual `auxiliar`
+
+Las contraseñas no se guardan en el repositorio; deben configurarse en Supabase.
+
 ## GitHub Pages
 
 El workflow está en `.github/workflows/deploy-pages.yml`. En el repositorio de GitHub configura estos secretos en `Settings > Secrets and variables > Actions`:

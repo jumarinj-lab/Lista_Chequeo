@@ -937,6 +937,11 @@ textarea:focus {
   font-weight: 850;
 }
 
+.auth-loading {
+  border: 1px solid #9aaec6;
+  border-radius: 8px;
+}
+
 .loading-spinner {
   width: 22px;
   height: 22px;

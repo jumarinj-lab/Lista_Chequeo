@@ -1,23 +1,23 @@
-const SESSION_STORAGE_KEY = "lista-chequeo-session";
+import { hasSupabaseConfig, supabase } from "./supabase";
 
-export const USERS = [
+const USER_PROFILES = [
   {
     username: "jefe",
-    password: "jefe",
+    email: "jefemipe@trigal.com",
     role: "jefe",
-    label: "Jefe"
+    label: "jefe"
   },
   {
     username: "operario",
-    password: "operario",
+    email: "operariomipe@trigal.com",
     role: "operario",
-    label: "Operario"
+    label: "operario"
   },
   {
     username: "auxiliar",
-    password: "auxiliar",
+    email: "auxiliarpro@trigal.com",
     role: "auxiliar",
-    label: "Auxiliar"
+    label: "auxiliar"
   }
 ];
 
@@ -39,58 +39,83 @@ export const ROLE_PERMISSIONS = {
   }
 };
 
+function normalizeLogin(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function getProfileByLogin(login) {
+  const normalizedLogin = normalizeLogin(login);
+
+  return USER_PROFILES.find((profile) =>
+    profile.username === normalizedLogin || profile.email === normalizedLogin
+  );
+}
+
+function getProfileByEmail(email) {
+  const normalizedEmail = normalizeLogin(email);
+  return USER_PROFILES.find((profile) => profile.email === normalizedEmail) ?? null;
+}
+
+function toSessionUser(profile, sessionUser) {
+  return {
+    id: sessionUser?.id ?? null,
+    email: profile.email,
+    username: profile.username,
+    role: profile.role,
+    label: profile.label
+  };
+}
+
 export function getPermissions(user) {
   return ROLE_PERMISSIONS[user?.role] ?? ROLE_PERMISSIONS.auxiliar;
 }
 
-export function authenticateUser(username, password) {
-  const normalizedUsername = String(username ?? "").trim().toLowerCase();
-  const user = USERS.find((item) =>
-    item.username === normalizedUsername && item.password === String(password ?? "")
-  );
+export async function authenticateUser(login, password) {
+  if (!hasSupabaseConfig || !supabase) {
+    throw new Error("Supabase no está configurado.");
+  }
 
-  if (!user) {
+  const profile = getProfileByLogin(login);
+
+  if (!profile) {
+    throw new Error("Usuario no autorizado.");
+  }
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: profile.email,
+    password: String(password ?? "")
+  });
+
+  if (error) {
+    throw new Error("Usuario o contraseña incorrectos.");
+  }
+
+  return toSessionUser(profile, data.user);
+}
+
+export async function loadSessionUser() {
+  if (!hasSupabaseConfig || !supabase) {
     return null;
   }
 
-  return {
-    username: user.username,
-    role: user.role,
-    label: user.label
-  };
-}
+  const { data, error } = await supabase.auth.getSession();
 
-export function loadSessionUser() {
-  const storedSession = window.localStorage.getItem(SESSION_STORAGE_KEY);
-
-  if (!storedSession) {
+  if (error || !data.session?.user?.email) {
     return null;
   }
 
-  try {
-    const parsedSession = JSON.parse(storedSession);
-    const user = USERS.find((item) => item.username === parsedSession.username);
+  const profile = getProfileByEmail(data.session.user.email);
 
-    if (!user) {
-      return null;
-    }
-
-    return {
-      username: user.username,
-      role: user.role,
-      label: user.label
-    };
-  } catch {
+  if (!profile) {
+    await supabase.auth.signOut();
     return null;
   }
+
+  return toSessionUser(profile, data.session.user);
 }
 
-export function saveSessionUser(user) {
-  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
-    username: user.username
-  }));
-}
-
-export function clearSessionUser() {
-  window.localStorage.removeItem(SESSION_STORAGE_KEY);
+export async function clearSessionUser() {
+  if (hasSupabaseConfig && supabase) {
+    await supabase.auth.signOut();
+  }
 }

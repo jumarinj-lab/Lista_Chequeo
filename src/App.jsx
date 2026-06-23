@@ -15,8 +15,7 @@ import {
   authenticateUser,
   clearSessionUser,
   getPermissions,
-  loadSessionUser,
-  saveSessionUser
+  loadSessionUser
 } from "./lib/auth";
 import {
   downloadSprayRecordsExcel,
@@ -765,19 +764,21 @@ function LoginScreen({ onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
+    setError("");
+    setIsSubmitting(true);
 
-    const user = authenticateUser(username, password);
-
-    if (!user) {
-      setError("Usuario o contraseña incorrectos.");
-      return;
+    try {
+      const user = await authenticateUser(username, password);
+      onLogin(user);
+    } catch (authError) {
+      setError(authError.message);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    saveSessionUser(user);
-    onLogin(user);
   }
 
   return (
@@ -800,8 +801,8 @@ function LoginScreen({ onLogin }) {
               onChange={(event) => setPassword(event.target.value)}
             />
           </label>
-          <button type="submit" className="primary-action">
-            Iniciar sesión
+          <button type="submit" className="primary-action" disabled={isSubmitting}>
+            {isSubmitting ? "Ingresando..." : "Iniciar sesión"}
           </button>
           {error ? <span className="error-message">{error}</span> : null}
         </form>
@@ -838,6 +839,23 @@ function HomeScreen({ currentUser, onLogout, onOpenSprayChecklist, onOpenRbMonit
   );
 }
 
+function AuthLoadingScreen() {
+  return (
+    <main className="home-shell">
+      <section className="login-panel">
+        <div>
+          <p className="eyebrow">Flores El Trigal</p>
+          <h1>Listas de chequeo</h1>
+        </div>
+        <div className="records-loading auth-loading">
+          <span className="loading-spinner" aria-hidden="true" />
+          <span>Validando sesión...</span>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 function ChecklistStartScreen({ saveState, permissions, onCreate }) {
   return (
     <section className="checklist-start">
@@ -861,7 +879,8 @@ function ChecklistStartScreen({ saveState, permissions, onCreate }) {
 }
 
 function App() {
-  const [currentUser, setCurrentUser] = useState(loadSessionUser);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const permissions = getPermissions(currentUser);
   const [activeModule, setActiveModule] = useState(null);
   const [view, setView] = useState(CHECKLIST_VIEW);
@@ -884,6 +903,25 @@ function App() {
   );
   const answeredCount = result.answeredCount;
   const totalItems = result.answerableCount;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function restoreSession() {
+      const sessionUser = await loadSessionUser();
+
+      if (isMounted) {
+        setCurrentUser(sessionUser);
+        setIsAuthLoading(false);
+      }
+    }
+
+    restoreSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   async function refreshRecords() {
     setIsRecordsLoading(true);
@@ -1120,12 +1158,16 @@ function App() {
     setView(CHECKLIST_VIEW);
   }
 
-  function handleLogout() {
-    clearSessionUser();
+  async function handleLogout() {
+    await clearSessionUser();
     setCurrentUser(null);
     setActiveModule(null);
     setIsChecklistActive(false);
     clearChecklistData();
+  }
+
+  if (isAuthLoading) {
+    return <AuthLoadingScreen />;
   }
 
   if (!currentUser) {
