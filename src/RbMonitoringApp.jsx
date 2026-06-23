@@ -20,6 +20,7 @@ import {
   matchesExportFilters
 } from "./lib/excelExport";
 import { hasSupabaseConfig } from "./lib/supabase";
+import { sanitizeDecimalInput } from "./lib/inputFormat";
 
 const CHECKLIST_VIEW = "checklist";
 const RECORDS_VIEW = "records";
@@ -458,9 +459,12 @@ function RendimientoSection({ form, expanded, onToggle, onChange, score }) {
             <label className="form-field">
               <span>Número de camas asignadas en una hora</span>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={form.assignedBeds}
-                onChange={(event) => onChange({ assignedBeds: event.target.value })}
+                onChange={(event) =>
+                  onChange({ assignedBeds: sanitizeDecimalInput(event.target.value) })
+                }
               />
             </label>
             <label className="form-field">
@@ -552,16 +556,22 @@ function SimulacrosSection({ form, expanded, onToggle, onChange, result }) {
                 </div>
                 <div>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={site.disposed}
-                    onChange={(event) => updateSite(index, { disposed: event.target.value })}
+                    onChange={(event) =>
+                      updateSite(index, { disposed: sanitizeDecimalInput(event.target.value) })
+                    }
                   />
                 </div>
                 <div>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={site.found}
-                    onChange={(event) => updateSite(index, { found: event.target.value })}
+                    onChange={(event) =>
+                      updateSite(index, { found: sanitizeDecimalInput(event.target.value) })
+                    }
                   />
                 </div>
               </div>

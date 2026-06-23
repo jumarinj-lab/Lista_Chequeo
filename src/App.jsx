@@ -10,6 +10,7 @@ import {
 } from "./lib/checklistMath";
 import { loadRecords, saveRecord, updateRecord } from "./lib/records";
 import { hasSupabaseConfig } from "./lib/supabase";
+import { sanitizeDecimalInput } from "./lib/inputFormat";
 import {
   downloadSprayRecordsExcel,
   getCurrentWeekCode,
@@ -196,9 +197,17 @@ function MetadataSection({
                   {field.required ? <b>*</b> : null}
                 </span>
                 <input
-                  type={field.type}
+                  type="text"
+                  inputMode={field.type === "decimal" ? "decimal" : undefined}
                   value={metadata[field.id] ?? ""}
-                  onChange={(event) => onMetadataChange(field.id, event.target.value)}
+                  onChange={(event) =>
+                    onMetadataChange(
+                      field.id,
+                      field.type === "decimal"
+                        ? sanitizeDecimalInput(event.target.value)
+                        : event.target.value
+                    )
+                  }
                   required={field.required}
                 />
               </label>
@@ -333,10 +342,13 @@ function ChecklistSection({
                           <input
                             className="value-input"
                             type="text"
+                            inputMode="decimal"
                             value={answer.value ?? ""}
                             placeholder="Valor medido"
                             onChange={(event) =>
-                              onAnswerChange(answerId, { value: event.target.value })
+                              onAnswerChange(answerId, {
+                                value: sanitizeDecimalInput(event.target.value)
+                              })
                             }
                           />
                           <StatusToggle
@@ -373,10 +385,13 @@ function ChecklistSection({
                         <input
                           className="value-input"
                           type="text"
+                          inputMode="decimal"
                           value={answer.value ?? ""}
                           placeholder={item.valueLabel ?? "-"}
                           onChange={(event) =>
-                            onAnswerChange(item.id, { value: event.target.value })
+                            onAnswerChange(item.id, {
+                              value: sanitizeDecimalInput(event.target.value)
+                            })
                           }
                         />
                       </div>

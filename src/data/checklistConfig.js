@@ -8,10 +8,10 @@ export const CHECKLIST_SECTIONS = [
       { id: "assurerRole", label: "Cargo del asegurador", type: "text", required: true },
       { id: "block", label: "Bloque", type: "text", required: true },
       { id: "sprayerGroup", label: "Grupo aspersión", type: "text", required: true },
-      { id: "stepsPerBed", label: "Número pases/cama", type: "text" },
-      { id: "volumePerBed", label: "Volumen/cama", type: "text" },
-      { id: "theoreticalFlow", label: "Caudal teórico", type: "text" },
-      { id: "theoreticalTravelTime", label: "Tiempo recorrido teórico", type: "text" }
+      { id: "stepsPerBed", label: "Número pases/cama", type: "decimal" },
+      { id: "volumePerBed", label: "Volumen/cama", type: "decimal" },
+      { id: "theoreticalFlow", label: "Caudal teórico", type: "decimal" },
+      { id: "theoreticalTravelTime", label: "Tiempo recorrido teórico", type: "decimal" }
     ],
     productCount: 7
   },
