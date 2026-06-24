@@ -54,9 +54,9 @@ export const RB_MONITORING_ITEMS = [
   },
   {
     id: "descansos_definidos",
-    label: "Realiza descansos indebidos",
+    label: "Cumple con los tiempos establecidos para los descansos",
     criterion:
-      "Realiza descansos indebidos al final de cama y conversaciones excesivas con sus compañeros.",
+      "Realiza los descansos únicamente en los tiempos autorizados, evitando permanecer al final de la cama o sostener conversaciones excesivas con sus compañeros.",
     weight: 10
   },
   {
