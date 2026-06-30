@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
+import DirectMonitoringApp from "./DirectMonitoringApp";
 import RbMonitoringApp from "./RbMonitoringApp";
 import {
   RecordFilters,
@@ -34,6 +35,7 @@ const CHECKLIST_VIEW = "checklist";
 const RECORDS_VIEW = "records";
 const SPRAY_CHECKLIST_MODULE = "spray-checklist";
 const RB_MONITORING_MODULE = "rb-monitoring";
+const DIRECT_MONITORING_MODULE = "direct-monitoring";
 const metadataSection = CHECKLIST_SECTIONS.find((section) => section.kind === "metadata");
 const observationSection = CHECKLIST_SECTIONS.find((section) => section.kind === "observations");
 const scoredSections = CHECKLIST_SECTIONS.filter((section) => Array.isArray(section.items));
@@ -808,7 +810,13 @@ function LoginScreen({ onLogin }) {
   );
 }
 
-function HomeScreen({ currentUser, onLogout, onOpenSprayChecklist, onOpenRbMonitoring }) {
+function HomeScreen({
+  currentUser,
+  onLogout,
+  onOpenSprayChecklist,
+  onOpenRbMonitoring,
+  onOpenDirectMonitoring
+}) {
   return (
     <main className="home-shell">
       <section className="home-panel">
@@ -828,6 +836,10 @@ function HomeScreen({ currentUser, onLogout, onOpenSprayChecklist, onOpenRbMonit
           </button>
           <button type="button" className="checklist-option" onClick={onOpenRbMonitoring}>
             <span>Aseguramiento de monitoreo roya blanca</span>
+            <strong>Ingresar</strong>
+          </button>
+          <button type="button" className="checklist-option" onClick={onOpenDirectMonitoring}>
+            <span>Aseguramiento de monitoreo directo</span>
             <strong>Ingresar</strong>
           </button>
         </div>
@@ -1183,6 +1195,17 @@ function App() {
       );
     }
 
+    if (activeModule === DIRECT_MONITORING_MODULE) {
+      return (
+        <DirectMonitoringApp
+          currentUser={currentUser}
+          permissions={permissions}
+          onHome={() => setActiveModule(null)}
+          onLogout={handleLogout}
+        />
+      );
+    }
+
     return (
       <HomeScreen
         currentUser={currentUser}
@@ -1194,6 +1217,9 @@ function App() {
         }}
         onOpenRbMonitoring={() => {
           setActiveModule(RB_MONITORING_MODULE);
+        }}
+        onOpenDirectMonitoring={() => {
+          setActiveModule(DIRECT_MONITORING_MODULE);
         }}
       />
     );

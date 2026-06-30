@@ -6,9 +6,25 @@
 -- Postgres puede no bajar de inmediato, pero el espacio queda disponible para
 -- reutilizarse en nuevas escrituras.
 
+create table if not exists public.direct_monitoring_records (
+  id uuid primary key,
+  created_at timestamptz not null default now(),
+  finished_at timestamptz,
+  saved_date text,
+  saved_time text,
+  week_code text,
+  form jsonb not null default '{}'::jsonb,
+  score numeric not null default 0,
+  percent numeric not null default 0,
+  summary jsonb not null default '{}'::jsonb
+);
+
+alter table public.direct_monitoring_records enable row level security;
+
 grant usage on schema public to authenticated;
 grant select, insert, update on public.spray_checklist_records to authenticated;
 grant select, insert, update on public.rb_monitoring_records to authenticated;
+grant select, insert, update on public.direct_monitoring_records to authenticated;
 
 drop policy if exists "spray_checklist_records_select" on public.spray_checklist_records;
 drop policy if exists "spray_checklist_records_insert" on public.spray_checklist_records;
@@ -51,6 +67,29 @@ with check (true);
 
 create policy "rb_monitoring_records_update"
 on public.rb_monitoring_records
+for update
+to authenticated
+using (true)
+with check (true);
+
+drop policy if exists "direct_monitoring_records_select" on public.direct_monitoring_records;
+drop policy if exists "direct_monitoring_records_insert" on public.direct_monitoring_records;
+drop policy if exists "direct_monitoring_records_update" on public.direct_monitoring_records;
+
+create policy "direct_monitoring_records_select"
+on public.direct_monitoring_records
+for select
+to authenticated
+using (true);
+
+create policy "direct_monitoring_records_insert"
+on public.direct_monitoring_records
+for insert
+to authenticated
+with check (true);
+
+create policy "direct_monitoring_records_update"
+on public.direct_monitoring_records
 for update
 to authenticated
 using (true)
@@ -108,7 +147,7 @@ as $$
 declare
   live_bytes bigint;
 begin
-  if target_table not in ('spray_checklist_records', 'rb_monitoring_records') then
+  if target_table not in ('spray_checklist_records', 'rb_monitoring_records', 'direct_monitoring_records') then
     raise exception 'Tabla de checklist no permitida: %', target_table;
   end if;
 
@@ -130,7 +169,8 @@ set search_path = public
 as $$
   select
     public.checklist_live_bytes('spray_checklist_records')
-    + public.checklist_live_bytes('rb_monitoring_records');
+    + public.checklist_live_bytes('rb_monitoring_records')
+    + public.checklist_live_bytes('direct_monitoring_records');
 $$;
 
 create or replace function public.prune_checklist_records()
@@ -172,6 +212,7 @@ begin
   select (
     (select count(*)::bigint from public.spray_checklist_records)
     + (select count(*)::bigint from public.rb_monitoring_records)
+    + (select count(*)::bigint from public.direct_monitoring_records)
   )
   into total_rows;
 
@@ -205,6 +246,18 @@ begin
           count(*) over () as table_count
         from public.spray_checklist_records
       ),
+      direct_candidates as (
+        select
+          'direct_monitoring_records'::text as table_name,
+          id,
+          coalesce(finished_at, created_at) as sort_at,
+          created_at,
+          row_number() over (
+            order by coalesce(finished_at, created_at), created_at, id
+          ) as age_rank,
+          count(*) over () as table_count
+        from public.direct_monitoring_records
+      ),
       rb_candidates as (
         select
           'rb_monitoring_records'::text as table_name,
@@ -225,6 +278,10 @@ begin
         select table_name, id, sort_at, created_at
         from rb_candidates
         where age_rank <= table_count - min_keep_rows
+        union all
+        select table_name, id, sort_at, created_at
+        from direct_candidates
+        where age_rank <= table_count - min_keep_rows
       )
       select table_name, id
       from removable_rows
@@ -236,6 +293,9 @@ begin
         where id = row_to_remove.id;
       elsif row_to_remove.table_name = 'rb_monitoring_records' then
         delete from public.rb_monitoring_records
+        where id = row_to_remove.id;
+      elsif row_to_remove.table_name = 'direct_monitoring_records' then
+        delete from public.direct_monitoring_records
         where id = row_to_remove.id;
       end if;
 
@@ -262,7 +322,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if target_table not in ('spray_checklist_records', 'rb_monitoring_records') then
+  if target_table not in ('spray_checklist_records', 'rb_monitoring_records', 'direct_monitoring_records') then
     raise exception 'Tabla de checklist no permitida: %', target_table;
   end if;
 
@@ -297,6 +357,15 @@ on public.rb_monitoring_records;
 create trigger rb_monitoring_records_storage_retention
 after insert or update
 on public.rb_monitoring_records
+for each statement
+execute function public.prune_checklist_records_after_write();
+
+drop trigger if exists direct_monitoring_records_storage_retention
+on public.direct_monitoring_records;
+
+create trigger direct_monitoring_records_storage_retention
+after insert or update
+on public.direct_monitoring_records
 for each statement
 execute function public.prune_checklist_records_after_write();
 
@@ -337,10 +406,16 @@ begin
       public.checklist_live_bytes('rb_monitoring_records') as live_bytes
     union all
     select
+      'direct_monitoring_records'::text as scope,
+      (select count(*)::bigint from public.direct_monitoring_records) as row_count,
+      public.checklist_live_bytes('direct_monitoring_records') as live_bytes
+    union all
+    select
       'all_checklist_records'::text as scope,
       (
         (select count(*)::bigint from public.spray_checklist_records)
         + (select count(*)::bigint from public.rb_monitoring_records)
+        + (select count(*)::bigint from public.direct_monitoring_records)
       ) as row_count,
       public.checklist_total_live_bytes() as live_bytes
   )
@@ -363,7 +438,8 @@ begin
   order by case usage_rows.scope
     when 'all_checklist_records' then 0
     when 'spray_checklist_records' then 1
-    else 2
+    when 'rb_monitoring_records' then 2
+    else 3
   end;
 end;
 $$;
