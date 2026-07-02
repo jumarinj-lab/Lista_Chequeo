@@ -1097,21 +1097,18 @@ export default function DirectMonitoringApp({ currentUser, permissions, onHome, 
                 <span>% Cumplimiento</span>
                 <strong>{formatNumber(result.percent)}%</strong>
               </div>
+              {editingRecord ? (
+                <div className="edit-mode-panel">
+                  <div>
+                    <span>Modo</span>
+                    <strong>{permissions.canEditRecords ? "Edición" : "Visualización"}</strong>
+                  </div>
+                  <button type="button" className="danger-action" onClick={cancelEditRecord}>
+                    Salir
+                  </button>
+                </div>
+              ) : null}
             </section>
-
-            {editingRecord ? (
-              <div className="editing-banner">
-                <span>
-                  {permissions.canEditRecords
-                    ? "Modo edición"
-                    : "Modo visualización"}{" "}
-                  - {editingRecord.savedDate} {editingRecord.savedTime}
-                </span>
-                <button type="button" className="danger-action" onClick={cancelEditRecord}>
-                  Salir
-                </button>
-              </div>
-            ) : null}
 
             {DIRECT_MONITORING_ITEMS.map((item, index) => (
               <DirectMonitoringSection
@@ -1126,13 +1123,12 @@ export default function DirectMonitoringApp({ currentUser, permissions, onHome, 
               />
             ))}
 
-            {permissions.canEditRecords ? (
-              <section className="summary-actions">
-                <button type="button" className="primary-action" onClick={handleSaveRecord}>
-                  Guardar registro
-                </button>
-              </section>
-            ) : null}
+            <DirectMonitoringLiveSummary
+              result={result}
+              form={form}
+              onSave={handleSaveRecord}
+              canSave={permissions.canEditRecords}
+            />
           </>
         ) : (
           <ChecklistStartScreen
@@ -1151,5 +1147,54 @@ export default function DirectMonitoringApp({ currentUser, permissions, onHome, 
         />
       )}
     </main>
+  );
+}
+
+function DirectMonitoringLiveSummary({ result, form, onSave, canSave }) {
+  return (
+    <section className="summary-panel">
+      <div className="summary-top">
+        <div>
+          <span className="section-index">Resumen</span>
+          <h2>Resultado del chequeo</h2>
+        </div>
+        <div className="score-card">
+          <span>Calificación</span>
+          <strong>{formatNumber(result.totalScore)} / {formatNumber(DIRECT_MONITORING_TOTAL_SCORE)}</strong>
+          <small>{formatNumber(result.percent)}% cumplimiento</small>
+        </div>
+      </div>
+      <div className="summary-grid">
+        <div className="summary-column good">
+          <h3>Cumple</h3>
+          {result.compliant.length ? result.compliant.map((row) => (
+            <p key={row.sectionTitle + row.itemLabel}>
+              <strong>{row.itemLabel}</strong>
+              <span>{row.sectionTitle}</span>
+            </p>
+          )) : <p className="empty-state">Sin ítems cumplidos.</p>}
+        </div>
+        <div className="summary-column bad">
+          <h3>No cumple</h3>
+          {result.nonCompliant.length ? result.nonCompliant.map((row) => (
+            <p key={row.sectionTitle + row.itemLabel}>
+              <strong>{row.itemLabel}</strong>
+              <span>{row.criterion}</span>
+            </p>
+          )) : <p className="empty-state">Sin situaciones por mejorar.</p>}
+        </div>
+        <div className="summary-column notes">
+          <h3>Observaciones</h3>
+          {form.observations?.trim() ? <p>{form.observations}</p> : <p className="empty-state">Sin observaciones.</p>}
+        </div>
+      </div>
+      {canSave ? (
+        <div className="summary-actions">
+          <button type="button" className="primary-action" onClick={onSave}>
+            Guardar registro
+          </button>
+        </div>
+      ) : null}
+    </section>
   );
 }

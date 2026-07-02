@@ -11,11 +11,17 @@ import { calculateMatrixSection } from "./checklistMath";
 const SPRAY_LABOR = "APLICACIÓN DE PLAGUICIDAS";
 const RB_LABOR = "MONITOREO ROYA BLANCA";
 const DIRECT_LABOR = "MONITOREO DIRECTO";
+const TSWV_LABOR = "ERRADICACION TSWV";
 const DIRECT_MONITORING_ASSIGNED_BEDS = 30;
 const DIRECT_MONITORING_RENDIMIENTO_SCORE = 20;
 const DIRECT_MONITORING_REGISTRO_SCORE = 75;
 const DIRECT_MONITORING_REQUERIMIENTOS_SCORE = 50;
 const DIRECT_MONITORING_SITE_SCORE = 3;
+const TSWV_ASSIGNED_BEDS = 10;
+const TSWV_RENDIMIENTO_SCORE = 10;
+const TSWV_ERRADICATION_SCORE = 10;
+const TSWV_ERRADICATION_TOTAL = 60;
+const TSWV_CONTROL_TOTAL = 55;
 const HEADER_CELLS = [
   { column: "B", value: "SEMANA" },
   { column: "C", value: "ÍTEM" },
@@ -161,6 +167,10 @@ function getWeekdayName(date) {
 }
 
 function getRbSimulacrosTotals(form = {}) {
+  if (form.simulacrosMode) {
+    return { programmed: 0, found: 0 };
+  }
+
   const sites = Array.isArray(form.sites) ? form.sites : [];
 
   return sites.reduce((totals, site) => ({
@@ -305,6 +315,10 @@ function buildSprayExportRows(records) {
 }
 
 function getRbSimulacrosScore(form) {
+  if (form.simulacrosMode) {
+    return RB_MONITORING_SIMULACROS_SCORE;
+  }
+
   const totalDisposed = form.sites.reduce(
     (sum, site) => sum + (Number(site.disposed) || 0),
     0
@@ -918,5 +932,137 @@ export function downloadDirectMonitoringRecordsExcel(records) {
       }
     ],
     fileName: "monitoreo-directo-" + getExportDateStamp() + ".xlsx"
+  });
+}
+
+const TSWV_CONTROL_WEIGHTS = {
+  vara_correcta: 5,
+  desinfeccion_cama: 5,
+  erradicacion_paquetes: 5,
+  registro_camas: 5,
+  registro_tallos: 5,
+  dispositivos_electronicos: 20,
+  tallos_sin_afectacion: 10
+};
+
+function getTswvRendimientoScore(form = {}) {
+  const monitoredBeds = Math.max(0, Math.min(TSWV_ASSIGNED_BEDS, Number(form.monitoredBeds) || 0));
+  return Math.round((monitoredBeds / TSWV_ASSIGNED_BEDS) * TSWV_RENDIMIENTO_SCORE);
+}
+
+function getTswvControlScore(form = {}) {
+  const controls = form.controls ?? {};
+  return Object.entries(TSWV_CONTROL_WEIGHTS).reduce((score, [id, weight]) =>
+    score + (controls[id] === "yes" ? weight : 0),
+  0);
+}
+
+function getTswvErradicationScore(form = {}) {
+  const erradications = Array.isArray(form.erradications) ? form.erradications : [];
+  return erradications.reduce((score, item) =>
+    score + (item.conforme === "yes" ? TSWV_ERRADICATION_SCORE : 0),
+  0);
+}
+
+function getTswvNonConformingStems(form = {}) {
+  const erradications = Array.isArray(form.erradications) ? form.erradications : [];
+  const total = erradications.reduce((sum, item) => sum + (Number(item.nonConformingStems) || 0), 0);
+  return total ? roundScore(total) : "";
+}
+
+function buildTswvExportRows(records) {
+  return records.flatMap((record) => {
+    const form = record.form ?? {};
+    const collaborator = form.monitorName ?? "";
+    const assurer = form.assurerName ?? "";
+    const week = record.weekCode ?? getWeekCodeFromDate(record.finishedAt ?? record.createdAt ?? record.savedDate);
+    const nonConformingStems = getTswvNonConformingStems(form);
+    const rows = [
+      [1, "RENDIMIENTO", TSWV_RENDIMIENTO_SCORE, getTswvRendimientoScore(form), ""],
+      [2, "CALIDAD", TSWV_ERRADICATION_TOTAL, getTswvErradicationScore(form), nonConformingStems],
+      [3, "REQUERIMIENTOS", TSWV_CONTROL_TOTAL, getTswvControlScore(form), ""]
+    ];
+
+    return rows.map(([item, concept, expected, result, nonConformingStemsValue]) => ({
+      scope: TSWV_LABOR + item,
+      week,
+      item,
+      concept,
+      collaborator,
+      expected,
+      result: roundScore(result),
+      percent: getPercent(result, expected),
+      assurer,
+      labor: TSWV_LABOR,
+      nonConformingStems: nonConformingStemsValue
+    }));
+  });
+}
+
+export function downloadTswvRecordsExcel(records) {
+  downloadWorkbook({
+    worksheets: [{ name: "Aseguramiento TSWV", content: buildWorksheetXml(buildTswvExportRows(records)) }],
+    fileName: "aseguramiento-tswv-" + getExportDateStamp() + ".xlsx"
+  });
+}
+
+
+const ASPIRADO_LABOR = "ASPIRADO";
+const ASPIRADO_ASSIGNED_BEDS = 16;
+const ASPIRADO_RENDIMIENTO_SCORE = 10;
+const ASPIRADO_QUALITY_SCORE = 30;
+const ASPIRADO_REQUIREMENTS_SCORE = 45;
+const ASPIRADO_REQUIREMENT_WEIGHTS = {
+  tapaoidos: 5,
+  guantes: 5,
+  bolsas_marcador: 5,
+  dispositivos: 20,
+  almacenamiento: 5,
+  maquina_asignada: 5
+};
+const ASPIRADO_QUALITY_WEIGHTS = {
+  tiempo_cama: 10,
+  jamas: 5,
+  horarios: 5,
+  bolsa_captura: 5,
+  ubicacion: 5
+};
+function getAspiradoRendimientoScore(form = {}) {
+  const monitoredBeds = Math.max(0, Math.min(ASPIRADO_ASSIGNED_BEDS, Number(form.monitoredBeds) || 0));
+  return Math.round((monitoredBeds / ASPIRADO_ASSIGNED_BEDS) * ASPIRADO_RENDIMIENTO_SCORE);
+}
+function getAspiradoWeightedScore(answers = {}, weights = {}) {
+  return Object.entries(weights).reduce((score, [id, weight]) => score + (answers[id] === "yes" ? weight : 0), 0);
+}
+function buildAspiradoExportRows(records) {
+  return records.flatMap((record) => {
+    const form = record.form ?? {};
+    const collaborator = form.aspiratorName ?? "";
+    const assurer = form.assurerName ?? "";
+    const week = record.weekCode ?? getWeekCodeFromDate(record.finishedAt ?? record.createdAt ?? record.savedDate);
+    const rows = [
+      [1, "RENDIMIENTO", ASPIRADO_RENDIMIENTO_SCORE, getAspiradoRendimientoScore(form)],
+      [2, "CALIDAD", ASPIRADO_QUALITY_SCORE, getAspiradoWeightedScore(form.quality, ASPIRADO_QUALITY_WEIGHTS)],
+      [3, "REQUERIMIENTOS", ASPIRADO_REQUIREMENTS_SCORE, getAspiradoWeightedScore(form.requirements, ASPIRADO_REQUIREMENT_WEIGHTS)]
+    ];
+    return rows.map(([item, concept, expected, result]) => ({
+      scope: ASPIRADO_LABOR + item,
+      week,
+      item,
+      concept,
+      collaborator,
+      expected,
+      result: roundScore(result),
+      percent: getPercent(result, expected),
+      assurer,
+      labor: ASPIRADO_LABOR,
+      nonConformingStems: ""
+    }));
+  });
+}
+export function downloadAspiradoRecordsExcel(records) {
+  downloadWorkbook({
+    worksheets: [{ name: "Aseguramiento Aspirado", content: buildWorksheetXml(buildAspiradoExportRows(records)) }],
+    fileName: "aseguramiento-aspirado-" + getExportDateStamp() + ".xlsx"
   });
 }

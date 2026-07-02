@@ -130,7 +130,7 @@ export function calculateScore(answers, options = {}) {
             sectionId: section.id,
             sectionTitle: section.title,
             itemId,
-            itemLabel: `${item.label} - Aspersor ${sprayerNumber}`,
+            itemLabel: `${item.label} - Asperjador ${sprayerNumber}`,
             criterion: item.criterion,
             weight: cellWeight,
             rawWeight: cellWeight,

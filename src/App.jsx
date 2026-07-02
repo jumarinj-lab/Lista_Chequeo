@@ -1,5 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import DirectMonitoringApp from "./DirectMonitoringApp";
+import TswvChecklistApp from "./TswvChecklistApp";
+import AspiradoChecklistApp from "./AspiradoChecklistApp";
 import RbMonitoringApp from "./RbMonitoringApp";
 import {
   RecordFilters,
@@ -36,6 +38,8 @@ const RECORDS_VIEW = "records";
 const SPRAY_CHECKLIST_MODULE = "spray-checklist";
 const RB_MONITORING_MODULE = "rb-monitoring";
 const DIRECT_MONITORING_MODULE = "direct-monitoring";
+const TSWV_CHECKLIST_MODULE = "tswv-checklist";
+const ASPIRADO_CHECKLIST_MODULE = "aspirado-checklist";
 const metadataSection = CHECKLIST_SECTIONS.find((section) => section.kind === "metadata");
 const observationSection = CHECKLIST_SECTIONS.find((section) => section.kind === "observations");
 const scoredSections = CHECKLIST_SECTIONS.filter((section) => Array.isArray(section.items));
@@ -307,7 +311,7 @@ function ChecklistSection({
           {section.matrix ? (
             <>
               <label className="sprayer-count-control">
-                <span>Número de aspersores</span>
+                <span>Número de asperjadores</span>
                 <select
                   value={sprayerCount}
                   disabled={readOnly}
@@ -344,7 +348,7 @@ function ChecklistSection({
                   <span>Criterio</span>
                   <span>Peso/asp.</span>
                   {Array.from({ length: sprayerCount }, (_, itemIndex) => (
-                    <span key={itemIndex}>Aspersor {itemIndex + 1}</span>
+                    <span key={itemIndex}>Asperjador {itemIndex + 1}</span>
                   ))}
                 </div>
 
@@ -815,7 +819,9 @@ function HomeScreen({
   onLogout,
   onOpenSprayChecklist,
   onOpenRbMonitoring,
-  onOpenDirectMonitoring
+  onOpenDirectMonitoring,
+  onOpenTswvChecklist,
+  onOpenAspiradoChecklist
 }) {
   return (
     <main className="home-shell">
@@ -840,6 +846,14 @@ function HomeScreen({
           </button>
           <button type="button" className="checklist-option" onClick={onOpenDirectMonitoring}>
             <span>Aseguramiento de monitoreo directo</span>
+            <strong>Ingresar</strong>
+          </button>
+          <button type="button" className="checklist-option" onClick={onOpenTswvChecklist}>
+            <span>Aseguramiento TSWV</span>
+            <strong>Ingresar</strong>
+          </button>
+          <button type="button" className="checklist-option" onClick={onOpenAspiradoChecklist}>
+            <span>Aseguramiento de Aspirado</span>
             <strong>Ingresar</strong>
           </button>
         </div>
@@ -1206,6 +1220,28 @@ function App() {
       );
     }
 
+    if (activeModule === TSWV_CHECKLIST_MODULE) {
+      return (
+        <TswvChecklistApp
+          currentUser={currentUser}
+          permissions={permissions}
+          onHome={() => setActiveModule(null)}
+          onLogout={handleLogout}
+        />
+      );
+    }
+
+    if (activeModule === ASPIRADO_CHECKLIST_MODULE) {
+      return (
+        <AspiradoChecklistApp
+          currentUser={currentUser}
+          permissions={permissions}
+          onHome={() => setActiveModule(null)}
+          onLogout={handleLogout}
+        />
+      );
+    }
+
     return (
       <HomeScreen
         currentUser={currentUser}
@@ -1220,6 +1256,12 @@ function App() {
         }}
         onOpenDirectMonitoring={() => {
           setActiveModule(DIRECT_MONITORING_MODULE);
+        }}
+        onOpenTswvChecklist={() => {
+          setActiveModule(TSWV_CHECKLIST_MODULE);
+        }}
+        onOpenAspiradoChecklist={() => {
+          setActiveModule(ASPIRADO_CHECKLIST_MODULE);
         }}
       />
     );

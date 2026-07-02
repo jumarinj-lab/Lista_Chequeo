@@ -136,7 +136,7 @@ export const CHECKLIST_SECTIONS = [
   },
   {
     id: "revision_aspersores",
-    title: "Revisión de aspersores",
+    title: "Revisión de asperjadores",
     matrix: {
       defaultSprayerCount: 1,
       maxSprayerCount: 6,

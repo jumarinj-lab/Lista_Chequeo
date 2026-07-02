@@ -702,6 +702,17 @@ textarea:focus {
   font-weight: 800;
 }
 
+.item-table .item-row > div:nth-child(3) {
+  color: #76520e;
+  font-weight: 850;
+  text-align: center;
+}
+
+.item-table .item-table-head span:nth-child(3) {
+  text-align: center;
+}
+
+
 .item-criterion {
   color: #4c5e75;
 }
@@ -902,6 +913,29 @@ textarea:focus {
   margin-top: 14px;
   padding: 12px;
   font-weight: 800;
+}
+
+.simulacros-mode-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.simulacros-mode-actions button {
+  min-height: 36px;
+  border: 1px solid #d6ad49;
+  border-radius: 6px;
+  background: #fff8e8;
+  color: #76520e;
+  font-weight: 850;
+  padding: 0 14px;
+}
+
+.simulacros-mode-actions button.selected {
+  border-color: #26619c;
+  background: #e6f0fb;
+  color: #1d3f6c;
 }
 
 .simulacros-table,
@@ -1309,3 +1343,42 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 }
+
+.tswv-erradications-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+}
+
+.tswv-erradications-grid .direct-bed-card {
+  min-width: 0;
+  overflow: visible;
+}
+
+.tswv-erradications-grid .direct-bed-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.tswv-erradications-grid .direct-bed-marking {
+  min-width: 0;
+}
+
+.rb-records-row {
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (max-width: 1180px) {
+  .tswv-erradications-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .tswv-erradications-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

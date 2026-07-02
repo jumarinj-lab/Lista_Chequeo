@@ -53,6 +53,7 @@ function createInitialForm() {
     assignedBeds: "",
     cropAge: RB_MONITORING_AGE_TIMES[0].id,
     rendimientoStatus: null,
+    simulacrosMode: null,
     sites: Array.from({ length: 3 }, () => ({
       block: "",
       bed: "",
@@ -126,15 +127,20 @@ function SectionHeader({ number, title, expanded, onToggle, rightSlot }) {
 function calculateMonitoringScore(form) {
   const rendimientoScore =
     form.rendimientoStatus === "yes" ? RB_MONITORING_RENDIMIENTO_SCORE : 0;
+  const simulacrosMode = form.simulacrosMode ?? null;
+  const isSpecialSimulacros = Boolean(simulacrosMode);
 
-  const totalDisposed = form.sites.reduce(
+  const rawTotalDisposed = form.sites.reduce(
     (sum, site) => sum + (Number(site.disposed) || 0),
     0
   );
-  const totalFound = form.sites.reduce((sum, site) => sum + (Number(site.found) || 0), 0);
-  const simulacrosPercent = totalDisposed > 0 ? (totalFound / totalDisposed) * 100 : 0;
-  const simulacrosScore =
-    totalDisposed <= 0
+  const rawTotalFound = form.sites.reduce((sum, site) => sum + (Number(site.found) || 0), 0);
+  const totalDisposed = isSpecialSimulacros ? 0 : rawTotalDisposed;
+  const totalFound = isSpecialSimulacros ? 0 : rawTotalFound;
+  const simulacrosPercent = isSpecialSimulacros ? 100 : totalDisposed > 0 ? (totalFound / totalDisposed) * 100 : 0;
+  const simulacrosScore = isSpecialSimulacros
+    ? RB_MONITORING_SIMULACROS_SCORE
+    : totalDisposed <= 0
       ? 0
       : simulacrosPercent >= 90
         ? 20
@@ -165,19 +171,26 @@ function calculateMonitoringScore(form) {
     nonCompliant.push(rendimientoRow);
   }
 
+  const simulacrosModeLabel =
+    simulacrosMode === "revision"
+      ? "Revisión"
+      : simulacrosMode === "camara_humeda"
+        ? "Cámara húmeda"
+        : "";
   const simulacrosRow = {
     sectionTitle: "Muestreo de simulacros",
-    itemLabel: "Simulacros encontrados",
-    criterion: `${formatNumber(totalFound)} encontrados de ${formatNumber(totalDisposed)} dispuestos.`,
+    itemLabel: simulacrosModeLabel || "Simulacros encontrados",
+    criterion: simulacrosModeLabel
+      ? simulacrosModeLabel + ": aplica puntaje completo."
+      : formatNumber(totalFound) + " encontrados de " + formatNumber(totalDisposed) + " dispuestos.",
     weight: simulacrosScore
   };
 
-  if (totalDisposed > 0 && simulacrosPercent >= 90) {
+  if (simulacrosModeLabel || (totalDisposed > 0 && simulacrosPercent >= 90)) {
     compliant.push(simulacrosRow);
   } else if (totalDisposed > 0) {
     nonCompliant.push(simulacrosRow);
   }
-
   for (const item of RB_MONITORING_ITEMS) {
     const row = {
       sectionTitle: "Ítems de control calidad",
@@ -505,21 +518,45 @@ function RendimientoSection({ form, expanded, onToggle, onChange, score, readOnl
 }
 
 function SimulacrosSection({ form, expanded, onToggle, onChange, result, readOnly = false }) {
+  const simulacrosMode = form.simulacrosMode ?? null;
+  const isSpecialSimulacros = Boolean(simulacrosMode);
   const isComplete =
-    form.bedMarking &&
-    form.sites.every(
-      (site) =>
-        site.block.trim() &&
-        site.bed.trim() &&
-        String(site.disposed).trim() &&
-        String(site.found).trim()
-    );
+    isSpecialSimulacros ||
+    (form.bedMarking &&
+      form.sites.every(
+        (site) =>
+          site.block.trim() &&
+          site.bed.trim() &&
+          String(site.disposed).trim() &&
+          String(site.found).trim()
+      ));
 
   function updateSite(index, patch) {
     onChange({
       sites: form.sites.map((site, siteIndex) =>
         siteIndex === index ? { ...site, ...patch } : site
       )
+    });
+  }
+
+  function updateSimulacrosMode(mode) {
+    const nextMode = simulacrosMode === mode ? null : mode;
+    const modeLabel =
+      nextMode === "revision"
+        ? "Revisión"
+        : nextMode === "camara_humeda"
+          ? "Cámara húmeda"
+          : "";
+
+    onChange({
+      simulacrosMode: nextMode,
+      sites: form.sites.map((site) => ({
+        ...site,
+        block: modeLabel,
+        bed: modeLabel,
+        disposed: nextMode ? "0" : "",
+        found: nextMode ? "0" : ""
+      }))
     });
   }
 
@@ -539,6 +576,24 @@ function SimulacrosSection({ form, expanded, onToggle, onChange, result, readOnl
 
       {expanded ? (
         <div className="collapsible-content">
+          <div className="simulacros-mode-actions">
+            <button
+              type="button"
+              className={simulacrosMode === "revision" ? "selected" : ""}
+              disabled={readOnly}
+              onClick={() => updateSimulacrosMode("revision")}
+            >
+              Revisión
+            </button>
+            <button
+              type="button"
+              className={simulacrosMode === "camara_humeda" ? "selected" : ""}
+              disabled={readOnly}
+              onClick={() => updateSimulacrosMode("camara_humeda")}
+            >
+              Cámara húmeda
+            </button>
+          </div>
           <div className="simulacros-table">
             <div className="simulacros-head">
               <span>Sitio</span>
@@ -554,7 +609,7 @@ function SimulacrosSection({ form, expanded, onToggle, onChange, result, readOnl
                   <input
                     type="text"
                     value={site.block}
-                    disabled={readOnly}
+                    disabled={readOnly || isSpecialSimulacros}
                     onChange={(event) => updateSite(index, { block: event.target.value })}
                   />
                 </div>
@@ -562,7 +617,7 @@ function SimulacrosSection({ form, expanded, onToggle, onChange, result, readOnl
                   <input
                     type="text"
                     value={site.bed}
-                    disabled={readOnly}
+                    disabled={readOnly || isSpecialSimulacros}
                     onChange={(event) => updateSite(index, { bed: event.target.value })}
                   />
                 </div>
@@ -570,8 +625,8 @@ function SimulacrosSection({ form, expanded, onToggle, onChange, result, readOnl
                   <input
                     type="text"
                     inputMode="decimal"
-                    value={site.disposed}
-                    disabled={readOnly}
+                    value={isSpecialSimulacros ? "0" : site.disposed}
+                    disabled={readOnly || isSpecialSimulacros}
                     onChange={(event) =>
                       updateSite(index, { disposed: sanitizeDecimalInput(event.target.value) })
                     }
@@ -581,8 +636,8 @@ function SimulacrosSection({ form, expanded, onToggle, onChange, result, readOnl
                   <input
                     type="text"
                     inputMode="decimal"
-                    value={site.found}
-                    disabled={readOnly}
+                    value={isSpecialSimulacros ? "0" : site.found}
+                    disabled={readOnly || isSpecialSimulacros}
                     onChange={(event) =>
                       updateSite(index, { found: sanitizeDecimalInput(event.target.value) })
                     }
